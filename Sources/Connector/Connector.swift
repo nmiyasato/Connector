@@ -9,7 +9,6 @@ public protocol Connector {
 
 public extension Connector {
     func fetch(from endpoint: EndpointType) async -> Result<EndpointType.Response, Error> where EndpointType.Response: Decodable {
-        return await dataProvider.request(endpoint)
+        return await dataProvider.fetch(from: endpoint)
     }
-
 }

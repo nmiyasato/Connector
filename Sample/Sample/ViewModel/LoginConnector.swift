@@ -10,14 +10,12 @@ class LoginConnector: Connector {
 
     func user(id: String, password: String) async -> Result<User, Error> {
         let endpoint = UserEndpoint(baseURL: URL(string: "https://www.google.com")!, id: id, password: password)
-        return await request(endpoint)
+        return await fetch(from: endpoint)
     }
 }
 
 struct MockLoginService: DataProvider {
-
-    func request<T: Decodable>(_ endpoint: any Endpoint) async -> Result<T, Error> {
-
+    func fetch<T: Decodable>(from endpoint: any Endpoint) async -> Result<T, Error> {
         // Ensure the endpoint is of the type we expect
         guard endpoint is UserEndpoint else {
             return .failure(NSError(domain: "", code: -1, userInfo: [NSLocalizedDescriptionKey: "Endpoint type mismatch"]))
