@@ -1,2 +1,5 @@
 *.xcuserstate
 .swiftpm/xcode/xcuserdata/nico.miyasato.xcuserdatad
+Sample/.DS_Store
+*.DS_Store
+.swiftpm/xcode/xcuserdata

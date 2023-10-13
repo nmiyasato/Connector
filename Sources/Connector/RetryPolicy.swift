@@ -7,15 +7,15 @@
 
 import Foundation
 
-protocol RetryPolicy {
+public protocol RetryPolicy {
     var maxRetryAttempts: Int { get }
     func delay(forAttempt attempt: Int) -> TimeInterval
 }
 
 public struct DefaultRetryPolicy: RetryPolicy {
-    var maxRetryAttempts: Int = 3
+    public var maxRetryAttempts: Int = 3
 
-    func delay(forAttempt attempt: Int) -> TimeInterval {
+    public func delay(forAttempt attempt: Int) -> TimeInterval {
         return 2.0 * Double(attempt)
     }
 }

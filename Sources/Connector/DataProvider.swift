@@ -7,10 +7,10 @@ public protocol DataProvider {
 
 extension DataProvider {
     public func fetch<T: Decodable>(from endpoint: any Endpoint) async -> Result<T, Error> {
-        var lastError: Error
+        let retryPolicy = retryPolicy ?? DefaultRetryPolicy()
+        
         for attempt in 0..<retryPolicy.maxRetryAttempts {
             do {
-                // Here you might want to customize your URLRequest based on the endpoint
                 var urlRequest = URLRequest(url: endpoint.endpointURL)
                 urlRequest.httpMethod = endpoint.httpMethod?.rawValue
                 urlRequest.allHTTPHeaderFields = endpoint.headers
@@ -26,13 +26,12 @@ extension DataProvider {
                 return .success(decodedResponse)
 
             } catch {
-                lastError = error
                 if attempt == retryPolicy.maxRetryAttempts - 1 {
                     return .failure(error)
                 }
-                await Task.sleep(UInt64(retryPolicy.delay(forAttempt: attempt) * 1_000_000_000))
+                try? await Task.sleep(nanoseconds: UInt64(retryPolicy.delay(forAttempt: attempt) * 1_000_000_000))
             }
         }
-        return .failure(lastError)
+        return .failure(URLError.unknown as! Error)
     }
 }
