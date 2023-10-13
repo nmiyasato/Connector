@@ -7,8 +7,9 @@ struct User: Codable {
 
 struct UserEndpoint: Endpoint {
     typealias Response = User
-    var baseURL: URL
-    var httpMethod: HTTPMethod { .get }
+
+    var endpointURL: URL
+    var httpMethod: HTTPMethod?
     var headers: [String : String]?
     var parameters: [String : Any]?
 

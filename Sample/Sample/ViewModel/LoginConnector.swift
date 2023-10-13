@@ -9,7 +9,7 @@ class LoginConnector: Connector {
     }
 
     func user(id: String, password: String) async -> Result<User, Error> {
-        let endpoint = UserEndpoint(baseURL: URL(string: "https://www.google.com")!, id: id, password: password)
+        let endpoint = UserEndpoint(endpointURL: URL(string: "https://www.google.com")!, id: id, password: password)
         return await fetch(from: endpoint)
     }
 }
