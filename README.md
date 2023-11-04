@@ -1,60 +1,115 @@
-# Networking Abstractions: Connector, DataProvider & Endpoint
+# Connector Package
 
-Welcome to our Networking Abstraction layer, a sleek, powerful, and flexible set of protocols to manage your network operations seamlessly. With a keen focus on testability and separation of concerns, this framework is designed to simplify network calls, enhance code reusability, and improve the overall architecture of your network layer. Let's dive into its core components:
+The Connector package provides a robust networking layer designed to simplify the process of making network requests and handling responses in your Swift applications. It abstracts networking into reusable connectors that can be configured with different data providers, making it easier to switch between mock and live network services.
 
-## Connector
+## Features
 
-The **Connector** is the forefront of this networking architecture. It ties everything together by managing how requests are fetched. By associating each connector with a particular type of endpoint, it maintains a clear relationship with the specific network operations required.
+- **Generic Connectors**: Define your endpoints and let the Connector handle the rest.
+- **Protocol-Oriented**: Easily mock your network layer for testing.
+- **Asynchronous API**: Modern Swift async/await support.
+- **Flexible Error Handling**: Customizable error responses for fine-grained control.
+- **Retrying Mechanism**: Customizable retry logic to handle transient network issues.
 
-### Features:
-- **Associated Endpoint Type**: Links the connector with a specific endpoint type to enforce consistency.
-- **Fetching**: Manages the fetch operation, streamlining how data is retrieved and decoded.
+## Installation
 
-## DataProvider
+To include the Connector package in your project, add the following to your `Package.swift`:
 
-The **DataProvider** is where the actual network logic resides. It determines how data is fetched—whether from a network source, cache, or mock data source, making it extremely flexible and testable.
+```swift
+dependencies: [
+    .package(url: "https://github.com/your-username/Connector.git", from: "1.0.0")
+]
+```
 
-### Features:
-- **Fetching with Generics**: Uses generics to decode the fetched data into the desired type seamlessly.
-- **Error Handling**: Structured to manage various error types, allowing for comprehensive error handling.
+## Usage
 
-## Endpoint
+Below are examples demonstrating the main structures of the Connector package:
 
-The **Endpoint** protocol delineates the essential data required to make a network request, such as the URL, HTTP method, headers, and parameters.
+### Defining an Endpoint
 
-### Features:
-- **Decodable Response**: Enables the decoding of responses into Swift types.
-- **URL Composition**: Aids in creating comprehensive URLs including base URL and path components.
-- **HTTP Method and Parameters**: Outlines the HTTP methods and parameters for each endpoint to maintain clarity.
+Create endpoints by conforming to the `Endpoint` protocol:
 
-## Getting Started
+```swift
+struct UserEndpoint: Endpoint {
+    typealias Response = User
 
-1. **Define Your Endpoints**: Create structs or classes conforming to the `Endpoint` protocol, specifying the necessary details.
-2. **Create DataProviders**: Define your data providers conforming to the `DataProvider` protocol, specifying how data should be fetched.
-3. **Implement Connectors**: Implement connectors to tie endpoints and data providers together, orchestrating the fetching process.
+    var endpointURL: URL { URL(string: "https://api.example.com/user")! }
+    // Other properties like HTTP method, headers, parameters...
+}
+```
 
-## Code Example
+### Implementing a Connector
 
-Here’s a quick example demonstrating the implementation of these protocols:
+Conform to the `Connector` protocol to implement a connector:
 
 ```swift
 class LoginConnector: Connector {
     typealias EndpointType = UserEndpoint
     var dataProvider: DataProvider
 
-    func user(id: String, password: String) async -> Result<User, Error> {
-        let endpoint = UserEndpoint(...)
-        return await fetch(from: endpoint)
+    init(dataProvider: DataProvider = MockLoginService()) {
+        self.dataProvider = dataProvider
     }
-}
 
-struct MockLoginService: DataProvider {
-    func fetch<T: Decodable>(from endpoint: any Endpoint) async -> Result<T, Error> {
-        // Your fetching logic goes here.
+    func user(id: String, password: String) async -> Result<User, Error> {
+        let endpoint = UserEndpoint(id: id, password: password)
+        return await fetch(from: endpoint)
     }
 }
 ```
 
-## Conclusion
+### Using a DataProvider
 
-Harness the power of our Networking Abstractions to make your network layer more manageable, testable, and elegant. Adapt each component to your specific needs and unlock a world of flexible networking possibilities.
+Implement a data provider to handle the actual network or mock requests:
+
+```swift
+struct MockLoginService: DataProvider {
+    func fetch<T: Decodable>(from endpoint: any Endpoint) async -> Result<T, Error> {
+        // Mock fetching logic
+    }
+}
+```
+
+### Working with the Connector in ViewModels
+
+```swift
+class UserViewModel {
+    var loginConnector: LoginConnector
+
+    @Published var user: User?
+
+    func getUser() async {
+        let result = await loginConnector.user(id: "123", password: "secret")
+
+        switch result {
+        case .success(let fetchedUser):
+            self.user = fetchedUser
+        case .failure(let error):
+            print("Error fetching user: \(error)")
+        }
+    }
+}
+```
+
+### Mocking for Tests
+
+```swift
+func testUserFetching() async {
+    let mockService = MockLoginService() // Returns a successful user fetch
+    let connector = LoginConnector(dataProvider: mockService)
+
+    let result = await connector.user(id: "test", password: "test")
+
+    switch result {
+    case .success(let user):
+        XCTAssertEqual(user.id, "expected-id")
+    case .failure(let error):
+        XCTFail("Fetching user failed: \(error)")
+    }
+}
+```
+
+## Customization
+
+- **Mock Responses**: Inject `MockLoginService` to return various responses for testing.
+- **Error Handling**: Customize `MockLoginService` to return different error types based on the scenario.
+- **Retry Logic**: Implement a retry strategy by conforming to a `RetryPolicy` protocol.
