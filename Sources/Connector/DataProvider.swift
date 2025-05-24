@@ -2,11 +2,11 @@ import Foundation
 
 public protocol DataProvider {
     var retryPolicy: RetryPolicy? { get }
-    func fetch<T: Decodable>(from endpoint: any Endpoint) async -> Result<T, Error>
+    func fetch<T: Decodable>(from endpoint: any Endpoint) async throws -> T
 }
 
 extension DataProvider {
-    public func fetch<T: Decodable>(from endpoint: any Endpoint) async -> Result<T, Error> {
+    public func fetch<T: Decodable>(from endpoint: any Endpoint) async throws -> T {
         let retryPolicy = retryPolicy ?? DefaultRetryPolicy()
         
         for attempt in 0..<retryPolicy.maxRetryAttempts {
@@ -23,15 +23,15 @@ extension DataProvider {
                 }
 
                 let decodedResponse = try JSONDecoder().decode(T.self, from: data)
-                return .success(decodedResponse)
+                return decodedResponse
 
             } catch {
                 if attempt == retryPolicy.maxRetryAttempts - 1 {
-                    return .failure(error)
+                    throw error
                 }
                 try? await Task.sleep(nanoseconds: UInt64(retryPolicy.delay(forAttempt: attempt) * 1_000_000_000))
             }
         }
-        return .failure(URLError.unknown as! Error)
+        throw URLError(.unknown)
     }
 }
