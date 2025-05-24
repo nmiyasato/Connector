@@ -6,13 +6,11 @@ class SampleViewModel {
     @Published var user: User?
     
     func getUser() async {
-        let result = await loginConnector.user(id: "123", password: "something")
-        
-        switch result {
-        case .success(let fetchedUser):
+        do {
+            let fetchedUser = try await loginConnector.user(id: "123", password: "something")
             self.user = fetchedUser
             print(self.user)
-        case .failure(let error):
+        } catch {
             print("Error fetching user: \(error)")
             // Handle the error accordingly
         }
