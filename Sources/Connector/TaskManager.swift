@@ -54,6 +54,7 @@ public actor TaskManager {
         let tasks = activeTasks[endpointId] ?? []
         for taskWrapper in tasks {
             taskWrapper.cancel()
+            unregisterTask(for: endpointId, taskId: taskWrapper.id)
         }
     }
     
@@ -63,6 +64,7 @@ public actor TaskManager {
                 taskWrapper.cancel()
             }
         }
+        activeTasks.removeAll()
     }
     
     public func getAllEndpointIds() -> [String] {
