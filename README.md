@@ -352,7 +352,6 @@ class ProductConnector: Connector {
     }
 }
 ```
-```
 
 
 ### 5. Use in ViewModels
@@ -396,7 +395,6 @@ class ProductViewModel: ObservableObject {
         }
     }
 }
-```
 ```
 
 ### 6. Set Up in Your App
