@@ -3,3 +3,5 @@
 Sample/.DS_Store
 *.DS_Store
 .swiftpm/xcode/xcuserdata
+Sample/Sample.xcodeproj/xcuserdata/miya.xcuserdatad/xcdebugger/Breakpoints_v2.xcbkptlist
+Sample/Sample.xcodeproj/xcuserdata/miya.xcuserdatad/xcschemes/xcschememanagement.plist
