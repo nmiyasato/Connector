@@ -25,11 +25,8 @@ public extension DataProvider {
     func fetch<T: Decodable>(from endpoint: any Endpoint) async throws -> T {
         let endpointId = endpoint.endpointURL.absoluteString
         let task = Task<T, Error> {
-            // Call the regular fetch implementation directly
-            var urlRequest = URLRequest(url: endpoint.endpointURL)
-            urlRequest.httpMethod = endpoint.httpMethod?.rawValue
-            urlRequest.allHTTPHeaderFields = endpoint.headers
             
+            var urlRequest = createRequest(for: endpoint)
             let retryPolicy = self.retryPolicy ?? DefaultRetryPolicy()
             
             for attempt in 0..<retryPolicy.maxRetryAttempts {
