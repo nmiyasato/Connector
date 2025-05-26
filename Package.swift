@@ -18,9 +18,24 @@ let package = Package(
         // Targets are the basic building blocks of a package, defining a module or a test suite.
         // Targets can depend on other targets in this package and products from dependencies.
         .target(
-            name: "Connector"),
+            name: "Connector",
+            plugins: [
+                .plugin(name: "RunMockolo"),
+            ]
+        ),
         .testTarget(
             name: "ConnectorTests",
-            dependencies: ["Connector"]),
+            dependencies: ["Connector"])
+        ,
+        .plugin(
+            name: "RunMockolo",
+            capability: .buildTool(),
+            dependencies: [.target(name: "mockolo")]
+        ),
+        .binaryTarget(
+            name: "mockolo",
+            url: "https://github.com/uber/mockolo/releases/download/2.4.0/mockolo.artifactbundle.zip",
+            checksum: "740787a5c532dc1a16e9b6940c7ef844caa1f7c02cb85b740e4f44f49a25dc68"
+        )
     ]
 )
