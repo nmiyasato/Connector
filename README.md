@@ -284,7 +284,6 @@ class MockAPIService: DataProvider {
     }
 }
 ```
-```
 
 ### 4. Create a Unified Connector for Multiple Endpoints
 
