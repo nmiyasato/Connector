@@ -1,5 +1,6 @@
 import Foundation
 import Connector
+
 class LoginConnector: Connector {
     typealias EndpointType = UserEndpoint
     var dataProvider: DataProvider
@@ -15,6 +16,8 @@ class LoginConnector: Connector {
 }
 
 struct MockLoginService: DataProvider {
+    var taskManager: TaskManager = TaskManager()
+    
     var retryPolicy: RetryPolicy? { nil }
 
     func fetch<T: Decodable>(from endpoint: any Endpoint) async throws -> T {
