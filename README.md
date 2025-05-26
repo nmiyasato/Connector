@@ -9,6 +9,7 @@ The Connector package provides a robust networking layer designed to simplify th
 - **Asynchronous API**: Modern Swift async/await support.
 - **Flexible Error Handling**: Customizable error responses for fine-grained control.
 - **Retrying Mechanism**: Customizable retry logic to handle transient network issues.
+- **Task Management**: Built-in support for managing and cancelling network requests.
 
 ## Installation
 
@@ -47,14 +48,14 @@ Conform to the `Connector` protocol to implement a connector:
 class LoginConnector: Connector {
     typealias EndpointType = UserEndpoint
     var dataProvider: DataProvider
-
-    init(dataProvider: DataProvider = MockLoginService()) {
+    
+    init(dataProvider: DataProvider = StandardDataProvider()) {
         self.dataProvider = dataProvider
     }
-
-    func user(id: String, password: String) async -> Result<User, Error> {
+    
+    func user(id: String, password: String) async throws -> User {
         let endpoint = UserEndpoint(id: id, password: password)
-        return await fetch(from: endpoint)
+        return try await fetch(from: endpoint)
     }
 }
 ```
@@ -64,11 +65,22 @@ class LoginConnector: Connector {
 Implement a data provider to handle the actual network or mock requests:
 
 ```swift
-struct MockLoginService: DataProvider {
-    func fetch<T: Decodable>(from endpoint: any Endpoint) async -> Result<T, Error> {
+class MockLoginService: DataProvider {
+    var retryPolicy: RetryPolicy? = nil
+    let taskManager = TaskManager()
+    
+    func fetch<T: Decodable>(from endpoint: any Endpoint) async throws -> T {
         // Mock fetching logic
+        // Return decoded data or throw an error
+        throw URLError(.badServerResponse)
     }
 }
+```
+
+You can also use the built-in `StandardDataProvider` class:
+
+```swift
+let dataProvider = StandardDataProvider(retryPolicy: DefaultRetryPolicy())
 ```
 
 ### Working with the Connector in ViewModels
@@ -76,18 +88,22 @@ struct MockLoginService: DataProvider {
 ```swift
 class UserViewModel {
     var loginConnector: LoginConnector
-
+    
     @Published var user: User?
-
+    @Published var error: Error?
+    
     func getUser() async {
-        let result = await loginConnector.user(id: "123", password: "secret")
-
-        switch result {
-        case .success(let fetchedUser):
+        do {
+            let fetchedUser = try await loginConnector.user(id: "123", password: "secret")
             self.user = fetchedUser
-        case .failure(let error):
+        } catch {
+            self.error = error
             print("Error fetching user: \(error)")
         }
+    }
+    
+    func cancelRequests() async {
+        await loginConnector.dataProvider.cancelAllRequests()
     }
 }
 ```
@@ -95,16 +111,14 @@ class UserViewModel {
 ### Mocking for Tests
 
 ```swift
-func testUserFetching() async {
+func testUserFetching() async throws {
     let mockService = MockLoginService() // Returns a successful user fetch
     let connector = LoginConnector(dataProvider: mockService)
-
-    let result = await connector.user(id: "test", password: "test")
-
-    switch result {
-    case .success(let user):
+    
+    do {
+        let user = try await connector.user(id: "test", password: "test")
         XCTAssertEqual(user.id, "expected-id")
-    case .failure(let error):
+    } catch {
         XCTFail("Fetching user failed: \(error)")
     }
 }
@@ -215,6 +229,7 @@ Create a `DataProvider` that handles actual network requests:
 ```swift
 class APIService: DataProvider {
     var retryPolicy: RetryPolicy? = DefaultRetryPolicy()
+    let taskManager = TaskManager()
     
     // Default implementation from DataProvider protocol will handle the actual networking
 }
@@ -222,6 +237,7 @@ class APIService: DataProvider {
 // For testing, create a mock service:
 class MockAPIService: DataProvider {
     var retryPolicy: RetryPolicy? = nil
+    let taskManager = TaskManager()
     
     // Mock data for testing
     let mockUsers: [String: User] = [
@@ -245,26 +261,26 @@ class MockAPIService: DataProvider {
         )
     ]
     
-    func fetch<T: Decodable>(from endpoint: any Endpoint) async -> Result<T, Error> {
+    func fetch<T: Decodable>(from endpoint: any Endpoint) async throws -> T {
         // Simulate network delay
         try? await Task.sleep(nanoseconds: 500_000_000)
         
         switch endpoint {
         case let userEndpoint as UserEndpoint:
             if let user = mockUsers[userEndpoint.userId] as? T {
-                return .success(user)
+                return user
             }
             
         case _ as ProductEndpoint:
             if let products = mockProducts as? T {
-                return .success(products)
+                return products
             }
             
         default:
             break
         }
         
-        return .failure(NSError(domain: "MockError", code: 404, userInfo: [NSLocalizedDescriptionKey: "Not found"]))
+        throw NSError(domain: "MockError", code: 404, userInfo: [NSLocalizedDescriptionKey: "Not found"])
     }
 }
 ```
@@ -277,19 +293,29 @@ class AppConnector {
     private let userConnector: UserConnector
     private let productConnector: ProductConnector
     
-    init(apiToken: String, dataProvider: DataProvider = APIService()) {
+    init(apiToken: String, dataProvider: DataProvider = StandardDataProvider()) {
         self.userConnector = UserConnector(apiToken: apiToken, dataProvider: dataProvider)
         self.productConnector = ProductConnector(apiToken: apiToken, dataProvider: dataProvider)
     }
     
     // User operations
-    func getUser(id: String) async -> Result<User, Error> {
-        return await userConnector.getUser(id: id)
+    func getUser(id: String) async throws -> User {
+        return try await userConnector.getUser(id: id)
     }
     
     // Product operations
-    func getProducts(category: String? = nil, limit: Int = 20) async -> Result<[Product], Error> {
-        return await productConnector.getProducts(category: category, limit: limit)
+    func getProducts(category: String? = nil, limit: Int = 20) async throws -> [Product] {
+        return try await productConnector.getProducts(category: category, limit: limit)
+    }
+    
+    // Cancellation methods
+    func cancelAllRequests() async {
+        await userConnector.dataProvider.cancelAllRequests()
+    }
+    
+    func cancelUserRequests(id: String) async {
+        let endpoint = UserEndpoint(userId: id, apiToken: "")
+        await userConnector.dataProvider.cancelRequest(for: endpoint)
     }
 }
 
@@ -304,9 +330,9 @@ class UserConnector: Connector {
         self.dataProvider = dataProvider
     }
     
-    func getUser(id: String) async -> Result<User, Error> {
+    func getUser(id: String) async throws -> User {
         let endpoint = UserEndpoint(userId: id, apiToken: apiToken)
-        return await fetch(from: endpoint)
+        return try await fetch(from: endpoint)
     }
 }
 
@@ -320,9 +346,9 @@ class ProductConnector: Connector {
         self.dataProvider = dataProvider
     }
     
-    func getProducts(category: String? = nil, limit: Int = 20) async -> Result<[Product], Error> {
+    func getProducts(category: String? = nil, limit: Int = 20) async throws -> [Product] {
         let endpoint = ProductEndpoint(category: category, limit: limit, apiToken: apiToken)
-        return await fetch(from: endpoint)
+        return try await fetch(from: endpoint)
     }
 }
 ```
@@ -345,18 +371,27 @@ class ProductViewModel: ObservableObject {
     func loadProducts(category: String? = nil) async {
         isLoading = true
         
-        let result = await connector.getProducts(category: category)
+        do {
+            let fetchedProducts = try await connector.getProducts(category: category)
+            
+            DispatchQueue.main.async {
+                self.isLoading = false
+                self.products = fetchedProducts
+                self.error = nil
+            }
+        } catch {
+            DispatchQueue.main.async {
+                self.isLoading = false
+                self.error = error
+            }
+        }
+    }
+    
+    func cancelAllRequests() async {
+        await connector.cancelAllRequests()
         
         DispatchQueue.main.async {
             self.isLoading = false
-            
-            switch result {
-            case .success(let fetchedProducts):
-                self.products = fetchedProducts
-                self.error = nil
-            case .failure(let fetchError):
-                self.error = fetchError
-            }
         }
     }
 }
@@ -368,9 +403,14 @@ class ProductViewModel: ObservableObject {
 // In your AppDelegate or main app setup
 let apiToken = "your_api_token_here"
 
-// For production
-let apiService = APIService()
+// For production with default retry policy
+let apiService = StandardDataProvider(retryPolicy: DefaultRetryPolicy())
 let appConnector = AppConnector(apiToken: apiToken, dataProvider: apiService)
+
+// For production with custom retry policy
+let customRetryPolicy = CustomRetryPolicy()
+let customApiService = StandardDataProvider(retryPolicy: customRetryPolicy)
+let customAppConnector = AppConnector(apiToken: apiToken, dataProvider: customApiService)
 
 // For testing or previews
 let mockService = MockAPIService()
@@ -382,6 +422,9 @@ let productViewModel = ProductViewModel(connector: appConnector)
 // Use the ViewModels in your views
 Task {
     await productViewModel.loadProducts(category: "electronics")
+    
+    // Cancel the request if needed
+    // await productViewModel.cancelAllRequests()
 }
 ```
 
@@ -389,25 +432,100 @@ Task {
 
 ```swift
 class ConnectorTests: XCTestCase {
-    func testProductFetching() async {
+    func testProductFetching() async throws {
         let mockService = MockAPIService()
         let connector = AppConnector(apiToken: "test_token", dataProvider: mockService)
         
-        let result = await connector.getProducts(category: "electronics")
-        
-        switch result {
-        case .success(let products):
+        do {
+            let products = try await connector.getProducts(category: "electronics")
             XCTAssertEqual(products.count, 2)
             XCTAssertEqual(products[0].name, "iPhone")
-        case .failure(let error):
+        } catch {
             XCTFail("Product fetching failed: \(error)")
         }
     }
+    
+    func testCancellation() async {
+        let mockService = MockAPIService()
+        let connector = AppConnector(apiToken: "test_token", dataProvider: mockService)
+        
+        // Start a request
+        Task {
+            do {
+                _ = try await connector.getProducts()
+                XCTFail("Request should have been cancelled")
+            } catch is CancellationError {
+                // Expected behavior when cancelled
+            } catch {
+                XCTFail("Unexpected error: \(error)")
+            }
+        }
+        
+        // Cancel the request
+        await connector.cancelAllRequests()
+        
+        // Verify cancellation (could check TaskManager state if exposed)
+    }
 }
+```
 ```
 
 ## Customization
 
 - **Mock Responses**: Inject custom data providers to return various responses for testing.
-- **Error Handling**: Customize your data provider to return different error types based on the scenario.
+- **Error Handling**: Customize your data provider to handle different error types based on the scenario.
 - **Retry Logic**: Implement a retry strategy by conforming to the `RetryPolicy` protocol.
+- **Task Management**: Use the `TaskManager` to track, manage, and cancel ongoing network requests.
+- **Request Cancellation**: Cancel specific requests or all requests using the methods provided by `DataProvider`.
+
+### Custom Retry Policy Example
+
+```swift
+struct CustomRetryPolicy: RetryPolicy {
+    var maxRetryAttempts: Int = 5
+    
+    func delay(forAttempt attempt: Int) -> TimeInterval {
+        // Exponential backoff with jitter
+        let baseDelay = 1.0
+        let maxDelay = 30.0
+        let exponentialDelay = min(maxDelay, baseDelay * pow(2.0, Double(attempt)))
+        let jitter = Double.random(in: 0.0...0.3) * exponentialDelay
+        return exponentialDelay + jitter
+    }
+}
+```
+
+## Task Cancellation
+
+The Connector package provides built-in support for cancelling network requests through the `TaskManager` actor, which is accessible via any `DataProvider` instance.
+
+### Cancelling All Requests
+
+```swift
+let connector = AppConnector(apiToken: "your_token", dataProvider: StandardDataProvider())
+
+// Cancel all ongoing requests
+await connector.dataProvider.cancelAllRequests()
+```
+
+### Cancelling Specific Requests
+
+```swift
+let endpoint = UserEndpoint(userId: "123", apiToken: "your_token")
+await connector.dataProvider.cancelRequest(for: endpoint)
+```
+
+### Handling Cancellation in Client Code
+
+```swift
+do {
+    let products = try await connector.getProducts()
+    // Process products
+} catch is CancellationError {
+    // Handle cancellation specifically
+    print("Request was cancelled")
+} catch {
+    // Handle other errors
+    print("Request failed: \(error)")
+}
+```
