@@ -26,7 +26,7 @@ public extension DataProvider {
         let endpointId = endpoint.endpointURL.absoluteString
         let task = Task<T, Error> {
             
-            var urlRequest = createRequest(for: endpoint)
+            let urlRequest = createRequest(for: endpoint)
             let retryPolicy = self.retryPolicy ?? DefaultRetryPolicy()
             
             for attempt in 0..<retryPolicy.maxRetryAttempts {
