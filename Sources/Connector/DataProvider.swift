@@ -1,5 +1,6 @@
 import Foundation
 
+/// @mockable
 public protocol DataProvider {
     var retryPolicy: RetryPolicy? { get }
     

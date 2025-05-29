@@ -1,5 +1,6 @@
 import Foundation
 
+/// @mockable
 public protocol Endpoint {
     associatedtype Response: Decodable
     
@@ -10,7 +11,9 @@ public protocol Endpoint {
 }
 
 extension Endpoint {
-    public var hostURL: URL { URL(string: endpointURL.scheme ?? "https:" + "//" + (endpointURL.host ?? ""))! }
+    public var hostURL: URL {
+        URL(string: (endpointURL.scheme ?? "https") + "://" + (endpointURL.host ?? ""))!
+    }
     public var path: String { endpointURL.pathComponents.joined(separator: "/").replacingOccurrences(of: "//", with: "/") }
 }
 
