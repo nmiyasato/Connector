@@ -1,0 +1,25 @@
+{
+  "configurations" : [
+    {
+      "id" : "9C0EBABE-4A77-46C6-A3C9-05FEB872EBDF",
+      "name" : "Configuration 1",
+      "options" : {
+
+      }
+    }
+  ],
+  "defaultOptions" : {
+    "testTimeoutsEnabled" : true
+  },
+  "testTargets" : [
+    {
+      "parallelizable" : false,
+      "target" : {
+        "containerPath" : "container:",
+        "identifier" : "ConnectorTests",
+        "name" : "ConnectorTests"
+      }
+    }
+  ],
+  "version" : 1
+}

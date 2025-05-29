@@ -1,6 +1,7 @@
 import Combine
 import Foundation
 
+/// @mockable
 public protocol Connector {
     associatedtype EndpointType: Endpoint
     var dataProvider: DataProvider { get }
