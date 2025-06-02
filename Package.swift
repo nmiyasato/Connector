@@ -25,7 +25,10 @@ let package = Package(
         ),
         .testTarget(
             name: "ConnectorTests",
-            dependencies: ["Connector"])
+            dependencies: ["Connector"],
+            resources: [
+                .copy("../../.build/pluginWorkDirectory/GeneratedMocks.swift") // Include generated mocks
+            ])
         ,
         .plugin(
             name: "RunMockolo",

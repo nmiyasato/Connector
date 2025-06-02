@@ -14,9 +14,9 @@ final class DataProviderTests: XCTestCase {
         var cancelAllRequestsCallCount = 0
         
         // For controlling test behavior
-        var mockResponse: Data?
+        var mockResponse: (() -> Data?)?
         var mockURLResponse: HTTPURLResponse?
-        var mockError: Error?
+        var mockError: (() -> Error?)?
         
         init(retryPolicy: RetryPolicy? = nil) {
             self.retryPolicy = retryPolicy
@@ -34,9 +34,9 @@ final class DataProviderTests: XCTestCase {
                 for attempt in 0..<retryPolicy.maxRetryAttempts {
                     do {
                         // Set up the mock URL session for this fetch
-                        mockURLSession.data = mockResponse
+                        mockURLSession.data = mockResponse?()
                         mockURLSession.response = mockURLResponse
-                        mockURLSession.error = mockError
+                        mockURLSession.error = mockError?()
                         
                         try Task.checkCancellation()
                         
@@ -103,7 +103,7 @@ final class DataProviderTests: XCTestCase {
             headerFields: nil
         )!
         
-        dataProvider.mockResponse = jsonData
+        dataProvider.mockResponse = { jsonData }
         dataProvider.mockURLResponse = httpResponse
         
         let endpoint = TestEndpoint()
@@ -120,7 +120,7 @@ final class DataProviderTests: XCTestCase {
         // Given
         let dataProvider = TestableDataProvider()
         let mockError = URLError(.notConnectedToInternet)
-        dataProvider.mockError = mockError
+        dataProvider.mockError = { mockError }
         
         let endpoint = TestEndpoint()
         
@@ -136,7 +136,7 @@ final class DataProviderTests: XCTestCase {
     
     func testDataProviderFetch_WithRetry() async {
         // Given
-        let mockRetryPolicy = MockRetryPolicy()
+        let mockRetryPolicy = RetryPolicyMock()
         mockRetryPolicy.maxRetryAttempts = 5
         
         let dataProvider = TestableDataProvider(retryPolicy: mockRetryPolicy)
@@ -158,11 +158,13 @@ final class DataProviderTests: XCTestCase {
             } else {
                 return jsonData
             }
-        }()
+        }
         dataProvider.mockURLResponse = httpResponse
+        
+        var urlSessionCallCount = 0
         dataProvider.mockURLSession.error = {
-            callCount += 1
-            if callCount == 1 {
+            urlSessionCallCount += 1
+            if urlSessionCallCount == 1 {
                 return URLError(.timedOut)
             } else {
                 return nil
@@ -172,7 +174,7 @@ final class DataProviderTests: XCTestCase {
         let endpoint = TestEndpoint()
         
         // When
-        let result: MockResponse = try! await dataProvider.fetch(from: endpoint)
+        let result: MockResponse = try! await dataProvider.fetch(from: endpoint) as MockResponse
         
         // Then
         XCTAssertEqual(result.message, "Success")
