@@ -43,7 +43,7 @@ public extension DataProvider {
                     }
                     
                     guard (200...299).contains(httpResponse.statusCode) else {
-                        throw HTTPError(statusCode: httpResponse.statusCode, data: data)
+                        throw URLError(.init(rawValue: httpResponse.statusCode))
                     }
 
                     let decodedResponse = try JSONDecoder().decode(T.self, from: data)
