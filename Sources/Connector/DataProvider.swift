@@ -24,10 +24,10 @@ public protocol DataProvider {
 public extension DataProvider {
     
     func fetch<T: Decodable>(from endpoint: any Endpoint) async throws -> T {
-        let endpointId = endpoint.endpointURL.absoluteString
+        let endpointId = "\(endpoint.endpointURL.host ?? "unknown"):\(endpoint.endpointURL.path)"
         let task = Task<T, Error> {
             
-            let urlRequest = createRequest(for: endpoint)
+            let urlRequest = try createRequest(for: endpoint)
             let retryPolicy = self.retryPolicy ?? DefaultRetryPolicy()
             
             for attempt in 0..<retryPolicy.maxRetryAttempts {
@@ -38,9 +38,12 @@ public extension DataProvider {
                     
                     try Task.checkCancellation()
 
-                    guard let httpResponse = response as? HTTPURLResponse,
-                          (200...299).contains(httpResponse.statusCode) else {
+                    guard let httpResponse = response as? HTTPURLResponse else {
                         throw URLError(.badServerResponse)
+                    }
+                    
+                    guard (200...299).contains(httpResponse.statusCode) else {
+                        throw HTTPError(statusCode: httpResponse.statusCode, data: data)
                     }
 
                     let decodedResponse = try JSONDecoder().decode(T.self, from: data)
@@ -74,7 +77,7 @@ public extension DataProvider {
     }
 
     func cancelRequest(for endpoint: any Endpoint) async {
-        let endpointId = endpoint.endpointURL.absoluteString
+        let endpointId = "\(endpoint.endpointURL.host ?? "unknown"):\(endpoint.endpointURL.path)"
         await taskManager.cancelTasks(for: endpointId)
     }
     
@@ -82,10 +85,26 @@ public extension DataProvider {
         await taskManager.cancelAllTasks()
     }
 
-    private func createRequest(for endpoint: any Endpoint) -> URLRequest {
+    private func createRequest(for endpoint: any Endpoint) throws -> URLRequest {
         var urlRequest = URLRequest(url: endpoint.endpointURL)
         urlRequest.httpMethod = endpoint.httpMethod?.rawValue
         urlRequest.allHTTPHeaderFields = endpoint.headers
+        
+        if let parameters = endpoint.parameters,
+           let httpMethod = endpoint.httpMethod,
+           httpMethod != .get {
+            let jsonData = try JSONSerialization.data(withJSONObject: parameters)
+            urlRequest.httpBody = jsonData
+            do {
+                let jsonData = try JSONSerialization.data(withJSONObject: parameters)
+                urlRequest.httpBody = jsonData
+                urlRequest.setValue("application/json", forHTTPHeaderField: "Content-Type")
+            } catch {
+                let endpointId = "\(endpoint.endpointURL.host ?? "unknown"):\(endpoint.endpointURL.path)"
+                throw DataProviderError.serializationFailed(endpoint: endpointId, parameters: parameters, underlyingError: error)
+            }
+        }
+        
         return urlRequest
     }
 }

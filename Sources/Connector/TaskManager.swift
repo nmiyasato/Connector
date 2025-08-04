@@ -8,7 +8,7 @@
 import Foundation
 
 // A class-based wrapper for Task to enable identity comparison
-public class TaskWrapper {
+public final class TaskWrapper: Sendable {
     let task: Any
     let id: String
     
@@ -54,8 +54,8 @@ public actor TaskManager {
         let tasks = activeTasks[endpointId] ?? []
         for taskWrapper in tasks {
             taskWrapper.cancel()
-            unregisterTask(for: endpointId, taskId: taskWrapper.id)
         }
+        activeTasks.removeValue(forKey: endpointId)
     }
     
     public func cancelAllTasks() {
