@@ -95,14 +95,7 @@ public extension DataProvider {
            httpMethod != .get {
             let jsonData = try JSONSerialization.data(withJSONObject: parameters)
             urlRequest.httpBody = jsonData
-            do {
-                let jsonData = try JSONSerialization.data(withJSONObject: parameters)
-                urlRequest.httpBody = jsonData
-                urlRequest.setValue("application/json", forHTTPHeaderField: "Content-Type")
-            } catch {
-                let endpointId = "\(endpoint.endpointURL.host ?? "unknown"):\(endpoint.endpointURL.path)"
-                throw DataProviderError.serializationFailed(endpoint: endpointId, parameters: parameters, underlyingError: error)
-            }
+            urlRequest.setValue("application/json", forHTTPHeaderField: "Content-Type")
         }
         
         return urlRequest
