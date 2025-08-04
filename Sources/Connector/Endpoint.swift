@@ -11,13 +11,20 @@ public protocol Endpoint {
 }
 
 extension Endpoint {
-    public var hostURL: URL {
-        URL(string: (endpointURL.scheme ?? "https") + "://" + (endpointURL.host ?? ""))!
+    public var hostURL: URL? {
+        guard let host = endpointURL.host else { return nil }
+        let scheme = endpointURL.scheme ?? "https"
+        return URL(string: "\(scheme)://\(host)")
     }
-    public var path: String { endpointURL.pathComponents.joined(separator: "/").replacingOccurrences(of: "//", with: "/") }
+    public var path: String { 
+        endpointURL.path.isEmpty ? "/" : endpointURL.path
+    }
 }
 
-public enum HTTPMethod: String {
+public enum HTTPMethod: String, Sendable {
     case get = "GET"
     case post = "POST"
+    case put = "PUT"
+    case delete = "DELETE"
+    case patch = "PATCH"
 }
