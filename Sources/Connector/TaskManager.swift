@@ -8,7 +8,7 @@
 import Foundation
 
 // A class-based wrapper for Task to enable identity comparison
-public final class TaskWrapper: Sendable {
+public class TaskWrapper: @unchecked Sendable {
     let task: Any
     let id: String
     
