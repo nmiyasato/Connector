@@ -13,7 +13,7 @@ public protocol RetryPolicy: Sendable {
     func delay(forAttempt attempt: Int) -> TimeInterval
 }
 
-public struct DefaultRetryPolicy: RetryPolicy, Sendable {
+public struct DefaultRetryPolicy: RetryPolicy, @unchecked Sendable {
     public var maxRetryAttempts: Int
     
     public init(maxRetryAttempts: Int = 3) {

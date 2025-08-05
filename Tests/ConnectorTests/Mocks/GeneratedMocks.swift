@@ -4,10 +4,32 @@
 
 
 
-import Combine
 import Foundation
 @testable import Connector
 
+
+public class ConnectorMock<EndpointType: Endpoint>: Connector {
+    public init() { }
+    public init(dataProvider: DataProvider = DataProviderMock()) {
+        self.dataProvider = dataProvider
+    }
+
+
+
+    public var dataProvider: DataProvider = DataProviderMock()
+
+    public var fetchCallCount = 0
+    public var fetchArgValues = [EndpointType]()
+    public var fetchHandler: ((EndpointType) async throws -> EndpointType.Response)?
+    public func fetch(from endpoint: EndpointType) async throws -> EndpointType.Response {
+        fetchCallCount += 1
+        fetchArgValues.append(endpoint)
+        if let fetchHandler = fetchHandler {
+            return try await fetchHandler(endpoint)
+        }
+        fatalError("fetchHandler returns can't have a default value thus its handler must be set")
+    }
+}
 
 public class DataProviderMock: DataProvider {
     public init() { }
@@ -85,30 +107,7 @@ public class EndpointMock<Response: Decodable>: Endpoint {
     public var parameters: [String: Any]? = nil
 }
 
-public class ConnectorMock<EndpointType: Endpoint>: Connector {
-    public init() { }
-    public init(dataProvider: DataProvider = DataProviderMock()) {
-        self.dataProvider = dataProvider
-    }
-
-
-
-    public var dataProvider: DataProvider = DataProviderMock()
-
-    public var fetchCallCount = 0
-    public var fetchArgValues = [EndpointType]()
-    public var fetchHandler: ((EndpointType) async throws -> EndpointType.Response)?
-    public func fetch(from endpoint: EndpointType) async throws -> EndpointType.Response {
-        fetchCallCount += 1
-        fetchArgValues.append(endpoint)
-        if let fetchHandler = fetchHandler {
-            return try await fetchHandler(endpoint)
-        }
-        fatalError("fetchHandler returns can't have a default value thus its handler must be set")
-    }
-}
-
-public class RetryPolicyMock: RetryPolicy {
+public final class RetryPolicyMock: RetryPolicy, @unchecked Sendable {
     public init() { }
     public init(maxRetryAttempts: Int = 0) {
         self.maxRetryAttempts = maxRetryAttempts
@@ -118,12 +117,25 @@ public class RetryPolicyMock: RetryPolicy {
 
     public var maxRetryAttempts: Int = 0
 
-    public var delayCallCount = 0
-    public var delayArgValues = [Int]()
-    public var delayHandler: ((Int) -> TimeInterval)?
+    private let delayState = MockoloMutex(MockoloHandlerState<Int, @Sendable (Int) -> TimeInterval>())
+    public var delayCallCount: Int {
+        get { delayState.withLock(\.callCount) }
+        set { delayState.withLock { $0.callCount = newValue } }
+    }
+    public var delayArgValues: [Int] {
+        return delayState.withLock(\.argValues).map(\.value)
+    }
+    public var delayHandler: (@Sendable (Int) -> TimeInterval)? {
+        get { delayState.withLock(\.handler) }
+        set { delayState.withLock { $0.handler = newValue } }
+    }
     public func delay(forAttempt attempt: Int) -> TimeInterval {
-        delayCallCount += 1
-        delayArgValues.append(attempt)
+        warnIfNotSendable(attempt)
+        let delayHandler = delayState.withLock { state in
+            state.callCount += 1
+            state.argValues.append(.init((attempt)))
+            return state.handler
+        }
         if let delayHandler = delayHandler {
             return delayHandler(attempt)
         }
@@ -131,5 +143,45 @@ public class RetryPolicyMock: RetryPolicy {
     }
 }
 
+fileprivate func warnIfNotSendable<each T>(function: String = #function, _: repeat each T) {
+    print("At \(function), the captured arguments are not Sendable, it is not concurrency-safe.")
+}
 
+fileprivate func warnIfNotSendable<each T: Sendable>(function: String = #function, _: repeat each T) {
+}
+
+/// Will be replaced to `Synchronization.Mutex` in future.
+fileprivate final class MockoloMutex<Value>: @unchecked Sendable {
+    private let lock = NSLock()
+    private var value: Value
+    init(_ initialValue: Value) {
+        self.value = initialValue
+    }
+#if compiler(>=6.0)
+    borrowing func withLock<Result, E: Error>(_ body: (inout sending Value) throws(E) -> Result) throws(E) -> sending Result {
+        lock.lock()
+        defer { lock.unlock() }
+        return try body(&value)
+    }
+#else
+    func withLock<Result>(_ body: (inout Value) throws -> Result) rethrows -> Result {
+        lock.lock()
+        defer { lock.unlock() }
+        return try body(&value)
+    }
+#endif
+}
+
+fileprivate struct MockoloUnsafeTransfer<Value>: @unchecked Sendable {
+    var value: Value
+    init(_ value: Value) {
+        self.value = value
+    }
+}
+
+fileprivate struct MockoloHandlerState<Arg, Handler> {
+    var argValues: [MockoloUnsafeTransfer<Arg>] = []
+    var handler: Handler? = nil
+    var callCount: Int = 0
+}
 
